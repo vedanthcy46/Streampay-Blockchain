@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id          String            @id @default(uuid())
+  displayName String
+  ownerWallet String
+  createdAt   DateTime          @default(now())
+  users       User[]
+  employees   EmployeeProfile[]
+  auditLogs   AuditLog[]
+}
+
+model User {
+  id            String           @id @default(uuid())
+  role          String           // "EMPLOYER" | "EMPLOYEE" | "ADMIN"
+  walletAddress String           @unique
+  email         String?
+  companyId     String?
+  company       Company?         @relation(fields: [companyId], references: [id])
+  employee      EmployeeProfile?
+  createdAt     DateTime         @default(now())
+}
+
+model EmployeeProfile {
+  id            String   @id @default(uuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id])
+  userId        String?  @unique
+  user          User?    @relation(fields: [userId], references: [id])
+  name          String
+  role          String
+  email         String?
+  walletAddress String
+  salaryMonthly Float
+  createdAt     DateTime @default(now())
+
+  @@index([companyId])
+  @@index([walletAddress])
+}
+
+model StreamProjection {
+  id              String   @id @default(uuid())
+  chainId         Int
+  contractAddress String
+  streamId        Int
+  employerWallet  String
+  employeeWallet  String
+  status          String   // "ACTIVE" | "PAUSED" | "TERMINATED" | "COMPLETED"
+  totalGross      String
+  durationSeconds Int
+  taxBps          Int
+  treasuryWallet  String
+  indexedBlock    Int
+  updatedAt       DateTime @updatedAt
+
+  @@unique([chainId, contractAddress, streamId])
+}
+
+model TransactionIndex {
+  id                 String   @id @default(uuid())
+  chainId            Int
+  txHash             String
+  logIndex           Int
+  eventName          String
+  confirmationStatus String   // "CONFIRMED" | "PENDING" | "FAILED"
+  streamId           Int?
+  details            String?
+  timestamp          DateTime @default(now())
+
+  @@unique([chainId, txHash, logIndex])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+  actor     String   // Wallet address or user ID
+  action    String   // "CREATE_STREAM", "PAUSE_STREAM", "ADD_EMPLOYEE", etc.
+  target    String   // Stream ID or employee ID
+  metadata  String?  // JSON string
+  timestamp DateTime @default(now())
+}
