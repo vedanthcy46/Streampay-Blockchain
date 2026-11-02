@@ -131,6 +131,8 @@ export function EmployerDashboard({ currentAddress }: EmployerDashboardProps) {
     fetchStreams();
   }, [currentAddress]);
 
+  const { isConnected } = useAccount();
+
   // Handle Token Approval
   const handleApprove = async () => {
     try {
@@ -138,14 +140,30 @@ export function EmployerDashboard({ currentAddress }: EmployerDashboardProps) {
       setStatusMessage("Requesting token approval...");
       const amountParsed = parseUnits(grossAmount, 6);
 
-      const tx = await writeContractAsync({
-        address: addresses.mockUSDC,
-        abi: MOCK_USDC_ABI,
-        functionName: "approve",
-        args: [addresses.payrollStream, amountParsed],
-      });
+      let tx: string;
+      if (isConnected) {
+        tx = await writeContractAsync({
+          address: addresses.mockUSDC,
+          abi: MOCK_USDC_ABI,
+          functionName: "approve",
+          args: [addresses.payrollStream, amountParsed],
+        });
+      } else {
+        const res = await fetch("/api/chain/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "APPROVE",
+            caller: currentAddress,
+            params: { amount: grossAmount },
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+        tx = data.txHash;
+      }
 
-      setStatusMessage(`Approval submitted: ${tx.slice(0, 10)}... Waiting confirmation.`);
+      setStatusMessage(`Approval confirmed: ${tx.slice(0, 10)}...`);
       await refetchAllowance();
       setStatusMessage("Token allowance approved successfully!");
     } catch (err: any) {
@@ -166,19 +184,41 @@ export function EmployerDashboard({ currentAddress }: EmployerDashboardProps) {
       const durationSec = BigInt(durationPreset);
       const taxBps = BigInt(Math.floor(Number(taxPercent) * 100));
 
-      const tx = await writeContractAsync({
-        address: addresses.payrollStream,
-        abi: PAYROLL_STREAM_ABI,
-        functionName: "createStream",
-        args: [
-          selectedEmployee as `0x${string}`,
-          addresses.mockUSDC,
-          amountParsed,
-          durationSec,
-          taxBps,
-          treasuryAddress as `0x${string}`,
-        ],
-      });
+      let tx: string;
+      if (isConnected) {
+        tx = await writeContractAsync({
+          address: addresses.payrollStream,
+          abi: PAYROLL_STREAM_ABI,
+          functionName: "createStream",
+          args: [
+            selectedEmployee as `0x${string}`,
+            addresses.mockUSDC,
+            amountParsed,
+            durationSec,
+            taxBps,
+            treasuryAddress as `0x${string}`,
+          ],
+        });
+      } else {
+        const res = await fetch("/api/chain/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "CREATE_STREAM",
+            caller: currentAddress,
+            params: {
+              employeeAddress: selectedEmployee,
+              grossAmount,
+              durationSeconds: durationPreset,
+              taxBps: Math.floor(Number(taxPercent) * 100),
+              treasuryAddress,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+        tx = data.txHash;
+      }
 
       setStatusMessage(`Stream created successfully! Tx: ${tx.slice(0, 10)}...`);
 
@@ -216,12 +256,28 @@ export function EmployerDashboard({ currentAddress }: EmployerDashboardProps) {
   const handlePause = async (streamId: number) => {
     try {
       setStatusMessage(`Pausing stream #${streamId}...`);
-      const tx = await writeContractAsync({
-        address: addresses.payrollStream,
-        abi: PAYROLL_STREAM_ABI,
-        functionName: "pauseStream",
-        args: [BigInt(streamId)],
-      });
+      let tx: string;
+      if (isConnected) {
+        tx = await writeContractAsync({
+          address: addresses.payrollStream,
+          abi: PAYROLL_STREAM_ABI,
+          functionName: "pauseStream",
+          args: [BigInt(streamId)],
+        });
+      } else {
+        const res = await fetch("/api/chain/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "PAUSE_STREAM",
+            caller: currentAddress,
+            params: { streamId },
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+        tx = data.txHash;
+      }
       setStatusMessage(`Stream #${streamId} paused. Tx: ${tx.slice(0, 10)}...`);
       await fetchStreams();
     } catch (err: any) {
@@ -233,12 +289,28 @@ export function EmployerDashboard({ currentAddress }: EmployerDashboardProps) {
   const handleResume = async (streamId: number) => {
     try {
       setStatusMessage(`Resuming stream #${streamId}...`);
-      const tx = await writeContractAsync({
-        address: addresses.payrollStream,
-        abi: PAYROLL_STREAM_ABI,
-        functionName: "resumeStream",
-        args: [BigInt(streamId)],
-      });
+      let tx: string;
+      if (isConnected) {
+        tx = await writeContractAsync({
+          address: addresses.payrollStream,
+          abi: PAYROLL_STREAM_ABI,
+          functionName: "resumeStream",
+          args: [BigInt(streamId)],
+        });
+      } else {
+        const res = await fetch("/api/chain/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "RESUME_STREAM",
+            caller: currentAddress,
+            params: { streamId },
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+        tx = data.txHash;
+      }
       setStatusMessage(`Stream #${streamId} resumed. Tx: ${tx.slice(0, 10)}...`);
       await fetchStreams();
     } catch (err: any) {
@@ -253,12 +325,28 @@ export function EmployerDashboard({ currentAddress }: EmployerDashboardProps) {
     }
     try {
       setStatusMessage(`Terminating stream #${streamId}...`);
-      const tx = await writeContractAsync({
-        address: addresses.payrollStream,
-        abi: PAYROLL_STREAM_ABI,
-        functionName: "terminateStream",
-        args: [BigInt(streamId)],
-      });
+      let tx: string;
+      if (isConnected) {
+        tx = await writeContractAsync({
+          address: addresses.payrollStream,
+          abi: PAYROLL_STREAM_ABI,
+          functionName: "terminateStream",
+          args: [BigInt(streamId)],
+        });
+      } else {
+        const res = await fetch("/api/chain/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "TERMINATE_STREAM",
+            caller: currentAddress,
+            params: { streamId },
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+        tx = data.txHash;
+      }
       setStatusMessage(`Stream #${streamId} terminated. Unearned funds refunded. Tx: ${tx.slice(0, 10)}...`);
       await fetchStreams();
       await refetchBalance();

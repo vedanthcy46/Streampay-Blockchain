@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { useWriteContract, useChainId, useReadContract } from "wagmi";
+import { useWriteContract, useChainId, useReadContract, useAccount } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
-import { Coins, CheckCircle2, AlertCircle, Copy, ExternalLink, ShieldCheck } from "lucide-react";
+import { Coins, CheckCircle2, AlertCircle, Copy } from "lucide-react";
 import { CONTRACT_ADDRESSES, LOCAL_HARDHAT_CHAIN_ID } from "@/lib/chain/config";
 import { MOCK_USDC_ABI } from "@/lib/chain/abis";
 
@@ -15,6 +15,8 @@ export function FaucetView({ currentAddress }: FaucetViewProps) {
   const chainId = useChainId();
   const addresses = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES] ||
     CONTRACT_ADDRESSES[LOCAL_HARDHAT_CHAIN_ID];
+
+  const { isConnected } = useAccount();
 
   const [dripAmount, setDripAmount] = useState("5000"); // 5,000 mUSDC
   const [isDripping, setIsDripping] = useState(false);
@@ -37,19 +39,40 @@ export function FaucetView({ currentAddress }: FaucetViewProps) {
       setErrorMsg(null);
       setSuccessTx(null);
 
-      const parsed = parseUnits(dripAmount, 6);
-      const tx = await writeContractAsync({
-        address: addresses.mockUSDC,
-        abi: MOCK_USDC_ABI,
-        functionName: "faucet",
-        args: [currentAddress as `0x${string}`, parsed],
-      });
+      let tx: string;
+
+      if (isConnected) {
+        // Direct browser wallet signing
+        const parsed = parseUnits(dripAmount, 6);
+        tx = await writeContractAsync({
+          address: addresses.mockUSDC,
+          abi: MOCK_USDC_ABI,
+          functionName: "faucet",
+          args: [currentAddress as `0x${string}`, parsed],
+        });
+      } else {
+        // Node-backed simulation for zero-config demonstration
+        const res = await fetch("/api/faucet", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recipient: currentAddress, amount: dripAmount }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || "Faucet execution failed");
+        }
+        tx = data.txHash;
+      }
 
       setSuccessTx(tx);
       await refetch();
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.shortMessage || err.message || "Faucet drip failed");
+      setErrorMsg(
+        err.shortMessage ||
+          err.message ||
+          "Faucet drip failed. Make sure your local node is running (npx hardhat node) or connect a browser wallet."
+      );
     } finally {
       setIsDripping(false);
     }
@@ -77,14 +100,16 @@ export function FaucetView({ currentAddress }: FaucetViewProps) {
               Mint Test Payment Tokens (mUSDC)
             </h2>
             <p className="text-xs text-slate-400 max-w-xl mt-1.5 leading-relaxed">
-              For evaluation and testing, you can mint up to 50,000 demonstration ERC-20 stablecoins (6 decimals) directly to your connected wallet. These tokens have no real-world monetary value and exist solely for payroll contract escrow simulation.
+              For evaluation and testing, you can mint up to 50,000 demonstration ERC-20 stablecoins (6 decimals) directly to your connected wallet or active persona. These tokens have no real monetary value and exist solely for payroll contract escrow simulation.
             </p>
           </div>
         </div>
 
         <div className="mt-8 bg-slate-950/70 border border-slate-800/80 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
-            <span className="text-xs text-slate-400">Current Balance for {currentAddress.slice(0, 6)}...{currentAddress.slice(-4)}:</span>
+            <span className="text-xs text-slate-400">
+              Current Balance for {currentAddress.slice(0, 6)}...{currentAddress.slice(-4)}:
+            </span>
             <div className="text-3xl font-extrabold text-white mt-1">
               ${formattedBal} <span className="text-sm font-normal text-amber-400">mUSDC</span>
             </div>

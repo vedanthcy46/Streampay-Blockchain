@@ -137,6 +137,8 @@ export function EmployeeDashboard({ currentAddress }: EmployeeDashboardProps) {
     return () => clearInterval(interval);
   }, [streamData]);
 
+  const { isConnected } = useAccount();
+
   // Handle Withdrawal
   const handleWithdraw = async () => {
     try {
@@ -144,12 +146,28 @@ export function EmployeeDashboard({ currentAddress }: EmployeeDashboardProps) {
       setErrorMsg(null);
       setClaimSuccessTx(null);
 
-      const tx = await writeContractAsync({
-        address: addresses.payrollStream,
-        abi: PAYROLL_STREAM_ABI,
-        functionName: "withdraw",
-        args: [BigInt(streamId)],
-      });
+      let tx: string;
+      if (isConnected) {
+        tx = await writeContractAsync({
+          address: addresses.payrollStream,
+          abi: PAYROLL_STREAM_ABI,
+          functionName: "withdraw",
+          args: [BigInt(streamId)],
+        });
+      } else {
+        const res = await fetch("/api/chain/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "WITHDRAW",
+            caller: currentAddress,
+            params: { streamId },
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+        tx = data.txHash;
+      }
 
       setClaimSuccessTx(tx);
 

@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useAccount, useConnect, useDisconnect, useChainId } from "wagmi";
+import React, { useState } from "react";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
-import { Wallet, ShieldCheck, Coins, RefreshCw, ChevronDown, Check } from "lucide-react";
+import { Wallet, Coins, ChevronDown, Check, LogOut, Radio } from "lucide-react";
 
 export const DEMO_ACCOUNTS = [
   {
@@ -43,26 +43,27 @@ export function Navbar({
   setMockAddressOverride,
 }: NavbarProps) {
   const { address: realAddress, isConnected } = useAccount();
-  const { connect } = useConnect();
+  const { connect, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
-  const chainId = useChainId();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const activeEffectiveAddress = mockAddressOverride || realAddress;
+  const isRealWalletActive = isConnected && !mockAddressOverride;
+  const activeEffectiveAddress = isRealWalletActive ? realAddress : mockAddressOverride || DEMO_ACCOUNTS[0].address;
 
-  const currentAccountLabel =
-    DEMO_ACCOUNTS.find(
-      (a) => a.address.toLowerCase() === activeEffectiveAddress?.toLowerCase()
-    )?.name ||
-    (activeEffectiveAddress
-      ? `${activeEffectiveAddress.slice(0, 6)}...${activeEffectiveAddress.slice(-4)}`
-      : "Not Connected");
+  const currentAccountLabel = isRealWalletActive
+    ? `MetaMask: ${realAddress?.slice(0, 6)}...${realAddress?.slice(-4)}`
+    : DEMO_ACCOUNTS.find(
+        (a) => a.address.toLowerCase() === activeEffectiveAddress?.toLowerCase()
+      )?.name || `${activeEffectiveAddress?.slice(0, 6)}...${activeEffectiveAddress?.slice(-4)}`;
 
   return (
-    <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
+    <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand */}
-        <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveTab("employer")}>
+        <div
+          className="flex items-center space-x-3 cursor-pointer"
+          onClick={() => setActiveTab("employer")}
+        >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
             <Coins className="w-5 h-5 text-white animate-pulse" />
           </div>
@@ -124,15 +125,39 @@ export function Navbar({
         </nav>
 
         {/* Wallet & Quick Switcher */}
-        <div className="flex items-center space-x-3">
-          {/* Demo Account Switcher Dropdown */}
+        <div className="flex items-center space-x-2.5">
+          {/* Real Wallet Connect Button */}
+          {isConnected ? (
+            <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>Connected: {realAddress?.slice(0, 6)}...{realAddress?.slice(-4)}</span>
+              <button
+                onClick={() => disconnect()}
+                className="ml-1 text-slate-400 hover:text-rose-400"
+                title="Disconnect"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => connect({ connector: injected() })}
+              disabled={isConnecting}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/25 transition-all"
+            >
+              <Wallet className="w-3.5 h-3.5" />
+              <span>{isConnecting ? "Connecting..." : "Connect MetaMask"}</span>
+            </button>
+          )}
+
+          {/* Persona / Demo Account Switcher Dropdown */}
           <div className="relative">
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 text-xs text-slate-200 transition-colors"
             >
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span className="font-medium truncate max-w-[150px]">{currentAccountLabel}</span>
+              <Radio className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="font-medium truncate max-w-[140px]">{currentAccountLabel}</span>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </button>
 
@@ -140,15 +165,40 @@ export function Navbar({
               <div className="absolute right-0 mt-2 w-72 rounded-xl bg-slate-900 border border-slate-700/80 shadow-2xl p-2 z-50">
                 <div className="px-2 py-1.5 border-b border-slate-800 mb-1">
                   <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Fast Demo Role Switcher
+                    Persona & Simulation Switcher
                   </p>
                   <p className="text-[10px] text-slate-500">
-                    Switch demo test wallets or connect MetaMask
+                    Switch between demo personas or use connected wallet
                   </p>
                 </div>
 
+                {isConnected && (
+                  <button
+                    onClick={() => {
+                      setMockAddressOverride(undefined);
+                      setDropdownOpen(false);
+                    }}
+                    className={`w-full text-left p-2 rounded-lg mb-1 transition-all flex items-center justify-between text-xs ${
+                      isRealWalletActive
+                        ? "bg-emerald-600/20 border border-emerald-500/40 text-emerald-300"
+                        : "hover:bg-slate-800/80 text-slate-300"
+                    }`}
+                  >
+                    <div>
+                      <div className="font-semibold text-emerald-400 flex items-center space-x-1">
+                        <span>MetaMask (Connected Wallet)</span>
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-400">
+                        {realAddress?.slice(0, 10)}...{realAddress?.slice(-6)}
+                      </p>
+                    </div>
+                    {isRealWalletActive && <Check className="w-4 h-4 text-emerald-400" />}
+                  </button>
+                )}
+
                 {DEMO_ACCOUNTS.map((acc) => {
                   const isCurrent =
+                    !isRealWalletActive &&
                     activeEffectiveAddress?.toLowerCase() === acc.address.toLowerCase();
                   return (
                     <button
@@ -164,8 +214,8 @@ export function Navbar({
                       }`}
                     >
                       <div>
-                        <div className="font-semibold text-slate-200 flex items-center space-x-1.5">
-                          <span>{acc.name}</span>
+                        <div className="font-semibold text-slate-200">
+                          {acc.name}
                         </div>
                         <p className="text-[10px] font-mono text-slate-400">
                           {acc.address.slice(0, 10)}...{acc.address.slice(-6)}
@@ -175,33 +225,6 @@ export function Navbar({
                     </button>
                   );
                 })}
-
-                <div className="border-t border-slate-800 pt-1 mt-1">
-                  {isConnected ? (
-                    <button
-                      onClick={() => {
-                        setMockAddressOverride(undefined);
-                        disconnect();
-                        setDropdownOpen(false);
-                      }}
-                      className="w-full text-center py-1.5 rounded-lg text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition-colors"
-                    >
-                      Disconnect Real Wallet
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        connect({ connector: injected() });
-                        setMockAddressOverride(undefined);
-                        setDropdownOpen(false);
-                      }}
-                      className="w-full text-center py-1.5 rounded-lg text-xs font-medium text-indigo-400 hover:bg-indigo-500/10 transition-colors flex items-center justify-center space-x-1.5"
-                    >
-                      <Wallet className="w-3.5 h-3.5" />
-                      <span>Connect MetaMask (Sepolia)</span>
-                    </button>
-                  )}
-                </div>
               </div>
             )}
           </div>
